@@ -28,13 +28,32 @@ jobs:
       - name: Build
         run: sam build --use-container
 
+      - name: Cleanup stack if in ROLLBACK_COMPLETE
+        shell: bash
+        run: |
+          set -euo pipefail
+          STACK_NAME='${{ secrets.STACK_NAME }}'
+          AWS_REGION='${{ secrets.AWS_REGION }}'
+          STATUS=$(aws cloudformation describe-stacks \
+            --stack-name "$STACK_NAME" \
+            --region "$AWS_REGION" \
+            --query 'Stacks[0].StackStatus' \
+            --output text 2>/dev/null || echo "NOT_FOUND")
+          echo "Current stack status: $STATUS"
+          if [ "$STATUS" = "ROLLBACK_COMPLETE" ]; then
+            echo "Deleting stack due to ROLLBACK_COMPLETE..."
+            aws cloudformation delete-stack --stack-name "$STACK_NAME" --region "$AWS_REGION"
+            aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" --region "$AWS_REGION"
+            echo "Stack deleted. Proceeding to deploy."
+          fi
+
       - name: Deploy
         run: |
           sam deploy \
             --no-fail-on-empty-changeset \
+            --region ${{ secrets.AWS_REGION }} \
             --stack-name ${{ secrets.STACK_NAME }} \
             --s3-prefix ${{ secrets.STACK_NAME }} \
             --resolve-s3 \
             --capabilities CAPABILITY_IAM \
             --parameter-overrides EnvironmentName=${{ secrets.ENVIRONMENT_NAME }} ApiKeyValue=${{ secrets.API_KEY_VALUE }}
-
