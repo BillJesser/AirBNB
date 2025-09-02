@@ -1,0 +1,195 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Serverless backend with API Gateway (REST), Lambda (Python), and DynamoDB.
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Timeout: 15
+    MemorySize: 256
+    Tracing: Active
+    Environment:
+      Variables:
+        TABLE_NAME: !Ref PropertiesTable
+        ENVIRONMENT: !Ref EnvironmentName
+    Layers:
+      - !Ref CommonLayer
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: dev
+  ApiKeyValue:
+    Type: String
+    NoEcho: true
+    Description: API key value for API Gateway Usage Plan. Provide a secure random string.
+
+Resources:
+  Api:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub properties-api-${EnvironmentName}
+      StageName: v1
+      TracingEnabled: true
+      EndpointConfiguration: REGIONAL
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Api-Key'"
+        AllowOrigin: "'*'"
+      Auth:
+        ApiKeyRequired: true
+
+  # DynamoDB table to store properties
+  PropertiesTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: !Sub properties-${EnvironmentName}
+      PrimaryKey:
+        Name: id
+        Type: String
+      SSESpecification:
+        SSEEnabled: true
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  # Lambda Layer for shared code and third-party deps
+  CommonLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub common-layer-${EnvironmentName}
+      Description: Common utilities and dependencies (e.g., requests)
+      ContentUri: src/layers/common
+      CompatibleRuntimes:
+        - python3.12
+      RetentionPolicy: Delete
+
+  # Functions
+  ListPropertiesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub list-properties-${EnvironmentName}
+      CodeUri: src/functions/list_properties
+      Handler: app.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PropertiesTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /properties
+            Method: GET
+            Auth:
+              ApiKeyRequired: true
+
+  GetPropertyFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub get-property-${EnvironmentName}
+      CodeUri: src/functions/get_property
+      Handler: app.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref PropertiesTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /properties/{id}
+            Method: GET
+            Auth:
+              ApiKeyRequired: true
+
+  SyncRealtorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub sync-realtor-${EnvironmentName}
+      CodeUri: src/functions/sync_realtor
+      Handler: app.handler
+      Timeout: 30
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PropertiesTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: '*'
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /internal/sync/realtor
+            Method: POST
+            Auth:
+              ApiKeyRequired: true
+
+  SyncZillowFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub sync-zillow-${EnvironmentName}
+      CodeUri: src/functions/sync_zillow
+      Handler: app.handler
+      Timeout: 30
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref PropertiesTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /internal/sync/zillow
+            Method: POST
+            Auth:
+              ApiKeyRequired: true
+
+  # API Key and Usage Plan
+  RestApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Name: !Sub properties-api-key-${EnvironmentName}
+      Enabled: true
+      Value: !Ref ApiKeyValue
+      StageKeys:
+        - RestApiId: !Ref Api
+          StageName: v1
+
+  RestUsagePlan:
+    Type: AWS::ApiGateway::UsagePlan
+    Properties:
+      UsagePlanName: !Sub properties-usage-plan-${EnvironmentName}
+      ApiStages:
+        - ApiId: !Ref Api
+          Stage: v1
+      Throttle:
+        BurstLimit: 10
+        RateLimit: 100
+      Quota:
+        Limit: 100000
+        Period: MONTH
+
+  RestUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    Properties:
+      KeyId: !Ref RestApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref RestUsagePlan
+
+Outputs:
+  ApiUrl:
+    Description: API base URL
+    Value: !Sub https://${Api}.execute-api.${AWS::Region}.amazonaws.com/v1
+  ApiKeyName:
+    Description: API key name to use in X-Api-Key header
+    Value: !Ref RestApiKey
+  TableName:
+    Description: DynamoDB table name
+    Value: !Ref PropertiesTable
+
