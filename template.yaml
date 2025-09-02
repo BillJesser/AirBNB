@@ -157,12 +157,12 @@ Resources:
       Name: !Sub properties-api-key-${EnvironmentName}
       Enabled: true
       Value: !Ref ApiKeyValue
-      StageKeys:
-        - RestApiId: !Ref Api
-          StageName: v1
+      # StageKeys removed; association is handled via UsagePlanKey
 
   RestUsagePlan:
     Type: AWS::ApiGateway::UsagePlan
+    DependsOn:
+      - Apiv1Stage
     Properties:
       UsagePlanName: !Sub properties-usage-plan-${EnvironmentName}
       ApiStages:
@@ -192,4 +192,3 @@ Outputs:
   TableName:
     Description: DynamoDB table name
     Value: !Ref PropertiesTable
-
