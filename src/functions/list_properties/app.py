@@ -1,7 +1,6 @@
 import json
-import os
-from common.db import get_table
 from common.serialization import to_jsonable
+from common.provider import list_listings, ProviderError
 
 
 def _response(status: int, body: dict | list):
@@ -13,9 +12,10 @@ def _response(status: int, body: dict | list):
 
 
 def handler(event, context):
-    table = get_table(os.environ["TABLE_NAME"]) 
-
-    # Simple scan; for production, consider GSI/queries and pagination
-    resp = table.scan(Limit=100)
-    items = resp.get("Items", [])
-    return _response(200, items)
+    try:
+        # Optional passthrough of query params to provider
+        query = (event or {}).get("queryStringParameters") or {}
+        items = list_listings(query)
+        return _response(200, items)
+    except ProviderError as e:
+        return _response(500, {"message": str(e)})

@@ -24,6 +24,36 @@ Parameters:
     NoEcho: true
     Description: API key value for API Gateway Usage Plan. Provide a secure random string.
 
+  JwtSecret:
+    Type: String
+    NoEcho: true
+    Default: dev-change-me
+    Description: Secret used to sign JWTs for login.
+
+  Provider:
+    Type: String
+    Default: RAIDAPI
+    AllowedValues:
+      - RAIDAPI
+      - APIFY
+    Description: External provider for listings.
+
+  ProviderApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: API key/token for the chosen provider.
+
+  ListingsUrl:
+    Type: String
+    Default: ""
+    Description: Full URL for provider listings endpoint.
+
+  ListingUrl:
+    Type: String
+    Default: ""
+    Description: URL template for single listing endpoint, may include {id}.
+
 Resources:
   Api:
     Type: AWS::Serverless::Api
@@ -53,6 +83,20 @@ Resources:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
 
+  # DynamoDB table for users
+  UsersTable:
+    Type: AWS::Serverless::SimpleTable
+    Properties:
+      TableName: !Sub users-${EnvironmentName}
+      PrimaryKey:
+        Name: email
+        Type: String
+      SSESpecification:
+        SSEEnabled: true
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
   # Lambda Layer for shared code and third-party deps
   CommonLayer:
     Type: AWS::Serverless::LayerVersion
@@ -71,9 +115,13 @@ Resources:
       FunctionName: !Sub list-properties-${EnvironmentName}
       CodeUri: src/functions/list_properties
       Handler: app.handler
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref PropertiesTable
+      Policies: []
+      Environment:
+        Variables:
+          PROVIDER: !Ref Provider
+          PROVIDER_API_KEY: !Ref ProviderApiKey
+          LISTINGS_URL: !Ref ListingsUrl
+          LISTING_URL: !Ref ListingUrl
       Events:
         ApiEvent:
           Type: Api
@@ -90,9 +138,13 @@ Resources:
       FunctionName: !Sub get-property-${EnvironmentName}
       CodeUri: src/functions/get_property
       Handler: app.handler
-      Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref PropertiesTable
+      Policies: []
+      Environment:
+        Variables:
+          PROVIDER: !Ref Provider
+          PROVIDER_API_KEY: !Ref ProviderApiKey
+          LISTINGS_URL: !Ref ListingsUrl
+          LISTING_URL: !Ref ListingUrl
       Events:
         ApiEvent:
           Type: Api
@@ -181,6 +233,54 @@ Resources:
       KeyId: !Ref RestApiKey
       KeyType: API_KEY
       UsagePlanId: !Ref RestUsagePlan
+
+  # Auth: signup
+  SignupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub signup-${EnvironmentName}
+      CodeUri: src/functions/auth_signup
+      Handler: app.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+      Environment:
+        Variables:
+          USERS_TABLE_NAME: !Ref UsersTable
+          JWT_SECRET: !Ref JwtSecret
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /auth/signup
+            Method: POST
+            Auth:
+              ApiKeyRequired: false
+
+  # Auth: login
+  LoginFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub login-${EnvironmentName}
+      CodeUri: src/functions/auth_login
+      Handler: app.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsersTable
+      Environment:
+        Variables:
+          USERS_TABLE_NAME: !Ref UsersTable
+          JWT_SECRET: !Ref JwtSecret
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /auth/login
+            Method: POST
+            Auth:
+              ApiKeyRequired: false
 
 Outputs:
   ApiUrl:
