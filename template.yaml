@@ -111,6 +111,8 @@ Resources:
       BuildMethod: python3.12
       BuildProperties:
         Commands:
+          - mkdir -p $LAMBDA_LAYER_ROOT/python
+          - cp -R python/. $LAMBDA_LAYER_ROOT/python/
           - pip install -r requirements.txt -t $LAMBDA_LAYER_ROOT/python
 
   # Functions
