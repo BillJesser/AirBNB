@@ -58,5 +58,4 @@ jobs:
             --capabilities CAPABILITY_IAM \
             --parameter-overrides \
               EnvironmentName=${{ secrets.ENVIRONMENT_NAME }} \
-              ApiKeyValue=${{ secrets.API_KEY_VALUE }} \
-              LayerVersionStamp=${{ github.sha }}
+              ApiKeyValue=${{ secrets.API_KEY_VALUE }}

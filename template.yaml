@@ -12,8 +12,6 @@ Globals:
       Variables:
         TABLE_NAME: !Ref PropertiesTable
         ENVIRONMENT: !Ref EnvironmentName
-    Layers:
-      - !Ref CommonLayer
 
 Parameters:
   EnvironmentName:
@@ -54,10 +52,6 @@ Parameters:
     Default: ""
     Description: URL template for single listing endpoint, may include {id}.
 
-  LayerVersionStamp:
-    Type: String
-    Default: ""
-    Description: Stamp to force a new LayerVersion (e.g., commit SHA)
 
 Resources:
   Api:
@@ -102,20 +96,6 @@ Resources:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
 
-  # Lambda Layer for shared code and third-party deps
-  CommonLayer:
-    Type: AWS::Serverless::LayerVersion
-    Properties:
-      LayerName: !Sub common-layer-${EnvironmentName}
-      Description: !Sub "Common utilities and dependencies (${EnvironmentName}) ${LayerVersionStamp}"
-      ContentUri: src/layers/common
-      CompatibleRuntimes:
-        - python3.12
-      RetentionPolicy: Delete
-    Metadata:
-      BuildMethod: python3.12
-      # Let SAM's default Python layer builder copy sources and install deps
-      # from requirements.txt into the layer's python/ directory.
 
   # Functions
   ListPropertiesFunction:

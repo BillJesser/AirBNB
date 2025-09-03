@@ -1,20 +1,18 @@
 import json
 import os
-from common.db import get_table
-from common.http import http_get
-from common.serialization import to_jsonable
+import boto3
 
 
 def _response(status: int, body: dict | list):
     return {
         "statusCode": status,
         "headers": {"Content-Type": "application/json"},
-        "body": json.dumps(body, default=to_jsonable),
+        "body": json.dumps(body),
     }
 
 
 def handler(event, context):
-    table = get_table(os.environ["TABLE_NAME"]) 
+    table = boto3.resource("dynamodb").Table(os.environ["TABLE_NAME"]) 
 
     # Placeholder logic: call Realtor (mocked) and upsert items
     # Replace with real endpoint + auth
