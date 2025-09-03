@@ -1,11 +1,9 @@
-from .db import get_table
-from .http import http_get, HttpError
-from .serialization import to_jsonable
+"""Common utilities package for Lambda layer.
 
-__all__ = [
-    "get_table",
-    "http_get",
-    "HttpError",
-    "to_jsonable",
-]
+Avoid importing submodules here to prevent pulling heavy dependencies
+unless a consumer explicitly imports them, e.g.:
+  from common.http import http_get
+  from common.auth import issue_jwt
+"""
 
+__all__ = []
