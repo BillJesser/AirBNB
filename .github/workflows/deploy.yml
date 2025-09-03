@@ -56,4 +56,7 @@ jobs:
             --s3-prefix ${{ secrets.STACK_NAME }} \
             --resolve-s3 \
             --capabilities CAPABILITY_IAM \
-            --parameter-overrides EnvironmentName=${{ secrets.ENVIRONMENT_NAME }} ApiKeyValue=${{ secrets.API_KEY_VALUE }}
+            --parameter-overrides \
+              EnvironmentName=${{ secrets.ENVIRONMENT_NAME }} \
+              ApiKeyValue=${{ secrets.API_KEY_VALUE }} \
+              LayerVersionStamp=${{ github.sha }}

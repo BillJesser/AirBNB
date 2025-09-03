@@ -54,6 +54,11 @@ Parameters:
     Default: ""
     Description: URL template for single listing endpoint, may include {id}.
 
+  LayerVersionStamp:
+    Type: String
+    Default: ""
+    Description: Stamp to force a new LayerVersion (e.g., commit SHA)
+
 Resources:
   Api:
     Type: AWS::Serverless::Api
@@ -102,7 +107,7 @@ Resources:
     Type: AWS::Serverless::LayerVersion
     Properties:
       LayerName: !Sub common-layer-${EnvironmentName}
-      Description: Common utilities and dependencies (e.g., requests)
+      Description: !Sub "Common utilities and dependencies (${EnvironmentName}) ${LayerVersionStamp}"
       ContentUri: src/layers/common
       CompatibleRuntimes:
         - python3.12
